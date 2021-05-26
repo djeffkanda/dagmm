@@ -1,0 +1,69 @@
+# -*- coding:utf-8 -*-
+
+from matplotlib import pyplot as plt
+import numpy as np
+
+
+def plot_losses(train_loss, val_loss, save_path='./'):
+    """
+    Function that plots loss and accuracy of active learning process for single query strategy
+    Args:
+        manager(TrainTestManager): trained TrainTestManager object
+        save_path(str): path where to save figure
+    """
+
+    num_data = range(len(train_loss))
+
+    f = plt.figure(figsize=(10, 5))
+    ax1 = f.add_subplot(111)
+    # ax2 = f.add_subplot(122)
+
+    # loss plot
+    ax1.plot(num_data, train_loss, label='Training loss')
+    ax1.plot(num_data, val_loss, label='Test loss')
+    ax1.set_title('Training and validation loss')
+    ax1.set_xlabel('# epochs')
+    ax1.set_ylabel('Loss')
+    ax1.legend()
+
+    # # accuracy plot
+    # ax2.plot(num_data, manager.metric_values['global_train_accuracy'], '-o', label='Training accuracy')
+    # ax2.plot(num_data, manager.metric_values['global_test_accuracy'], '-o', label='Test accuracy')
+    # ax2.set_title('Training and test accuracy')
+    # ax2.set_xlabel('Number of data used')
+    # ax2.set_ylabel('Accuracy')
+    # ax2.legend()
+    f.savefig(save_path + 'fig.png')
+    plt.show()
+
+
+def plot_2D_latent(X, y, save_path='./'):
+    f = plt.figure(figsize=(10, 5))
+    ax1 = f.add_subplot(111)
+
+    for label in np.unique(y):
+        mask = y == label
+        ax1.scatter(X[mask, 0], X[mask, 1], label=str(label))
+
+    ax1.set_title('Representation in latent space')
+    ax1.set_xlabel('x')
+    ax1.set_ylabel('y')
+    ax1.legend()
+    f.savefig(save_path + 'fig_latent.png')
+    plt.show()
+
+
+def plot_1D_latent_vs_loss(X, y, losses_items, save_path='./'):
+    f = plt.figure(figsize=(10, 5))
+    ax1 = f.add_subplot(111)
+
+    for label in np.unique(y):
+        mask = y == label
+        ax1.scatter(X[mask, 0], losses_items[mask], label=str(label))
+
+    ax1.set_title('Representation in latent space')
+    ax1.set_xlabel('z')
+    ax1.set_ylabel('loss')
+    ax1.legend()
+    f.savefig(save_path + 'fig_latent.png')
+    plt.show()

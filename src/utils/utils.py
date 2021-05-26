@@ -4,10 +4,12 @@ PhD Project
 Authors: D'Jeff Kanda
 """
 import os
+from typing import Type, Callable
 
 import torchvision.transforms as transforms
 from torchvision import datasets
 import torch.nn.functional as F
+import torch
 
 
 def get_data(data_augment: bool, dataset: str = 'mnistfashion'):
@@ -97,3 +99,25 @@ def check_dir(path):
     directory = os.path.dirname(path)
     if not os.path.exists(directory):
         os.makedirs(directory)
+
+
+def optimizer_setup(optimizer_class: Type[torch.optim.Optimizer], **hyperparameters) -> \
+        Callable[[torch.nn.Module], torch.optim.Optimizer]:
+    """
+    Creates a factory method that can instanciate optimizer_class with the given
+    hyperparameters.
+
+    Why this? torch.optim.Optimizer takes the model's parameters as an argument.
+    Thus we cannot pass an Optimizer to the CNNBase constructor.
+
+    Args:
+        optimizer_class: optimizer used to train the model
+        **hyperparameters: hyperparameters for the model
+        Returns:
+            function to setup the optimizer
+    """
+
+    def f(model):
+        return optimizer_class(model.parameters(), **hyperparameters)
+
+    return f
