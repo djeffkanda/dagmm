@@ -17,6 +17,7 @@ import copy
 # from datamanager.GenericDataset import GenericDataset
 # from datamanager.NSLKDDDataset import NSLKDDDataset
 from datamanager.KDD10Dataset import KDD10Dataset
+from src.datamanager.NSLKDDDataset import NSLKDDDataset
 from utils.utils import check_dir, optimizer_setup
 # from TrainTestManager import TrainTestManager, optimizer_setup
 
@@ -78,17 +79,28 @@ if __name__ == "__main__":
 
     # Loading the data
     if args.dataset == 'kdd':
-        dataset = KDD10Dataset('') # KDDDataset(path='../data/kddcup.data_10_percent_corrected.csv')
+        dataset = KDD10Dataset('')
+        model = DAGMM(dataset.get_shape()[1],
+                      [60, 30, 10, 1],
+                      fa='tanh',
+                      gmm_layers=[10, 4]
+                      )
+        # split data in train and test sets
+        train_set, test_set = dataset.one_class_split_train_test(test_perc=0.5, label=0)
     elif args.dataset == 'nslkdd':
         dataset = NSLKDDDataset(path='../data/NSL-KDD/KDDTrain.txt')
+        train_set, test_set = dataset.one_class_split_train_test(test_perc=0.5, label=0)
+        # test_set = NSLKDDDataset(path='../data/NSL-KDD/KDDTest.txt')
+        model = DAGMM(dataset.get_shape()[1],
+                      [60, 30, 10, 1],
+                      fa='tanh',
+                      gmm_layers=[10, 2]
+                      )
     else:
         raise Exception("This dataset is not available for experiment at present")
 
     # normal_data = dataset.get_data_index_by_label(label=0)
 
-    # split data in train and test sets
-    train_set, test_set = dataset.one_class_split_train_test(test_perc=0.5, label=0)
-    # test_set = NSLKDDDataset(path='../data/NSL-KDD/KDDTest.txt')
     dm = DataManager(train_set, test_set, batch_size=batch_size, validation=0.000001)
 
     # safely create save path
@@ -99,11 +111,7 @@ if __name__ == "__main__":
     elif args.optimizer == 'Adam':
         optimizer_factory = optimizer_setup(optim.Adam, lr=learning_rate)
 
-    model = DAGMM(dataset.get_shape()[1],
-                  [60, 30, 10, 1],
-                  fa='tanh',
-                  gmm_layers=[10, 4]
-                  )
+
 
     model_trainer = DAGMMTrainTestManager(model=model,
                                           dm=dm,

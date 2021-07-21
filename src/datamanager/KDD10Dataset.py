@@ -29,7 +29,6 @@ class KDD10Dataset(Dataset):
             check_file_exists(f'{BASE_PATH}/')
             df = self._import_data()
             X = self.preprocess(df)
-
         # Extract labels and features in two separate arrays
         self.X = X[:, :-1]
         self.y = X[:, -1]

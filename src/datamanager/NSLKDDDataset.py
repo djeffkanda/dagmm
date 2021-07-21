@@ -10,11 +10,11 @@ from sklearn import preprocessing
 
 class NSLKDDDataset(Dataset):
     """
-    This class is used to load KDD Cup dataset as a pytorch Dataset
+    This class is used to load NSL KDD Cup dataset as a pytorch Dataset
     """
 
-    def __init__(self, path='../data/kddcup_data'):
-        self.path = path
+    def __init__(self, path=None):
+        self.path = path or '../data/NSL-KDD/KDDTrain.txt'
 
         # load data
         # if os.path.exists('../data/nslkdd_cup.npz'):
@@ -45,7 +45,6 @@ class NSLKDDDataset(Dataset):
         return indices[self.y == label]
 
     def _load_data(self, path):
-        LABEL_INDEX = 41
 
         column_names = names = ['duration', 'protocol_type', 'service', 'flag', 'src_bytes', 'dst_bytes', 'land',
                                 'wrong_fragment', 'urgent', 'hot', 'num_failed_logins', 'logged_in', 'num_compromised',

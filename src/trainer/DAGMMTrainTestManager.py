@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 from datamanager.DataManager import DataManager
-from sklearn.metrics import precision_recall_fscore_support as prf, accuracy_score
+from sklearn.metrics import precision_recall_fscore_support as prf, accuracy_score, confusion_matrix
 
 
 class DAGMMTrainTestManager(object):
@@ -241,15 +241,17 @@ class DAGMMTrainTestManager(object):
 
             # Prediction using the threshold value
             pred = (test_energy > thresh).astype(int)
-            gt = test_labels.astype(int)
+            groundtruth = test_labels.astype(int)
 
-            accuracy = accuracy_score(gt, pred)
-            precision, recall, f_score, support = prf(gt, pred, average='binary')
+            accuracy = accuracy_score(groundtruth, pred)
+            precision, recall, f_score, support = prf(groundtruth, pred, average='binary')
 
-            print("Accuracy : {:0.4f}, Precision : {:0.4f}, Recall : {:0.4f}, F-score : {:0.4f}".format(accuracy,
-                                                                                                        precision,
-                                                                                                        recall,
-                                                                                                        f_score))
+            print(f"Accuracy:{accuracy}, "
+                  f"Precision:{precision}, "
+                  f"Recall:{recall}, "
+                  f"F-score:{f_score}, "
+                  f"\nconfusion-matrix: {confusion_matrix(groundtruth, pred)}")
+
             # switch back to train mode
             self.model.train()
             return accuracy, precision, recall, f_score, test_z, test_labels, combined_energy
