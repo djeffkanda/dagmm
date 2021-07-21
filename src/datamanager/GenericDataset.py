@@ -8,7 +8,7 @@ import numpy as np
 from sklearn import preprocessing
 
 
-class KDDDataset(Dataset):
+class GenericDataset(Dataset):
     """
     This class is used to load KDD Cup dataset as a pytorch Dataset
     """
@@ -17,24 +17,17 @@ class KDDDataset(Dataset):
         self.path = path
 
         # load data
-        if os.path.exists('../data/kdd_cup.npz'):
-            data = np.load('../data/kdd_cup.npz')['kdd']
-        else:
-            data = self._load_data(path)
+        # if os.path.exists('../data/kdd_cup.npz'):
+        #     data = np.load('../data/kdd_cup.npz')['kdd']
+        # else:
+        data = self._load_data(path)
 
         self.X, self.y = data[:, :-1], data[:, -1]
 
-        # Normalize data
-        # X_mean = np.mean(self.X, axis=1)
-        # X_std = np.std(self.X, axis=1)
-        # self.X = (self.X - X_mean)/X_std
-
-        # scaler = preprocessing.MinMaxScaler()
-        # self.X = scaler.fit_transform(self.X)
         self.n = len(data)
 
     def __len__(self):
-        return len(self.X)
+        return self.n
 
     def __getitem__(self, index) -> T_co:
         return self.X[index], self.y[index]
@@ -44,7 +37,8 @@ class KDDDataset(Dataset):
         return indices[self.y == label]
 
     def _load_data(self, path):
-        LABEL_INDEX = 41
+
+        print(path)
 
         column_names = names = ['duration', 'protocol_type', 'service', 'flag', 'src_bytes', 'dst_bytes', 'land',
                                 'wrong_fragment', 'urgent', 'hot', 'num_failed_logins', 'logged_in', 'num_compromised',
@@ -56,9 +50,7 @@ class KDDDataset(Dataset):
                                 'dst_host_same_src_port_rate', 'dst_host_srv_diff_host_rate', 'dst_host_serror_rate',
                                 'dst_host_srv_serror_rate', 'dst_host_rerror_rate', 'dst_host_srv_rerror_rate', 'type']
 
-        # print(os.getcwd())
-        # print(os.path.exists(path))
-        df = pd.read_csv(path, header=None, names=column_names)
+        df = pd.read_csv(path, header=None,)  # names=column_names)
 
         # regroup all the abnormal data to attack
         df['type'] = df['type'].map(lambda x: 1 if x == 'normal.' else 0)
@@ -97,7 +89,7 @@ class KDDDataset(Dataset):
 
         kdd_numpy = np.array(df, dtype="float32")
 
-        np.savez('../data/kdd_cup.npz', kdd=kdd_numpy)
+        # np.savez('../data/kdd_cup.npz', kdd=kdd_numpy)
 
         return kdd_numpy
 

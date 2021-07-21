@@ -8,7 +8,7 @@ import numpy as np
 from sklearn import preprocessing
 
 
-class KDDDataset(Dataset):
+class NSLKDDDataset(Dataset):
     """
     This class is used to load KDD Cup dataset as a pytorch Dataset
     """
@@ -17,11 +17,12 @@ class KDDDataset(Dataset):
         self.path = path
 
         # load data
-        if os.path.exists('../data/kdd_cup.npz'):
-            data = np.load('../data/kdd_cup.npz')['kdd']
-        else:
-            data = self._load_data(path)
+        # if os.path.exists('../data/nslkdd_cup.npz'):
+        #     data = np.load('../data/nslkdd_cup.npz')['kdd']
+        # else:
+        #     data = self._load_data(path)
 
+        data = self._load_data(path)
         self.X, self.y = data[:, :-1], data[:, -1]
 
         # Normalize data
@@ -54,14 +55,15 @@ class KDDDataset(Dataset):
                                 'same_srv_rate', 'diff_srv_rate', 'srv_diff_host_rate', 'dst_host_count',
                                 'dst_host_srv_count', 'dst_host_same_srv_rate', 'dst_host_diff_srv_rate',
                                 'dst_host_same_src_port_rate', 'dst_host_srv_diff_host_rate', 'dst_host_serror_rate',
-                                'dst_host_srv_serror_rate', 'dst_host_rerror_rate', 'dst_host_srv_rerror_rate', 'type']
+                                'dst_host_srv_serror_rate', 'dst_host_rerror_rate', 'dst_host_srv_rerror_rate', 'type',
+                                'level']
 
-        # print(os.getcwd())
-        # print(os.path.exists(path))
         df = pd.read_csv(path, header=None, names=column_names)
 
         # regroup all the abnormal data to attack
-        df['type'] = df['type'].map(lambda x: 1 if x == 'normal.' else 0)
+        df['type'] = df['type'].map(lambda x: 1 if x == 'normal' else 0)
+        # df['type'] = df['type'].map(lambda x: 0 if x == 'normal' else 1)
+        print(df['type'].value_counts())
 
         # transform categorical variables to one hot
 
@@ -69,9 +71,14 @@ class KDDDataset(Dataset):
         one_hot_service = pd.get_dummies(df["service"])
         one_hot_flag = pd.get_dummies(df["flag"])
 
+        labels = df["type"]
         df = df.drop("protocol_type", axis=1)
         df = df.drop("service", axis=1)
         df = df.drop("flag", axis=1)
+        df = df.drop("type", axis=1)
+        df = df.drop("level", axis=1)
+
+        df["type"] = labels
 
         df = pd.concat([one_hot_protocol, one_hot_service, one_hot_flag, df], axis=1)
 
@@ -90,14 +97,22 @@ class KDDDataset(Dataset):
                         "dst_host_srv_rerror_rate"]
 
         # Normalize data
+        df = df.apply(pd.to_numeric)
+
         min_cols = df.loc[df["type"] == 0, cols_to_norm].min()
         max_cols = df.loc[df["type"] == 0, cols_to_norm].max()
+
+
+
+        # test = df.isnull().values.any()
 
         df.loc[:, cols_to_norm] = (df[cols_to_norm] - min_cols) / (max_cols - min_cols)
 
         kdd_numpy = np.array(df, dtype="float32")
+        kdd_numpy[np.isnan(kdd_numpy)] = 0
+        kdd_numpy[np.isinf(kdd_numpy)] = 0
 
-        np.savez('../data/kdd_cup.npz', kdd=kdd_numpy)
+        np.savez('../data/nslkdd_cup.npz', kdd=kdd_numpy)
 
         return kdd_numpy
 
@@ -124,7 +139,6 @@ class KDDDataset(Dataset):
         print(f'Size of data with label ={label} :', 100 * len(label_data_index) / self.n)
 
         test_set = Subset(self, remaining_index)
-
         return train_set, test_set
 
     def get_shape(self):

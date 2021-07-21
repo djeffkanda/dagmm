@@ -1,5 +1,5 @@
 # -*- coding:utf-8 -*-
-
+from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import pyplot as plt
 import numpy as np
 
@@ -53,6 +53,21 @@ def plot_2D_latent(X, y, save_path='./'):
     plt.show()
 
 
+def plot_energy_percentile(energies, save_path='./'):
+    f = plt.figure(figsize=(10, 5))
+    ax1 = f.add_subplot(111)
+
+    q = np.linspace(0, 100, 100)
+    # oo = np.percentile(energies, q)
+    ax1.plot(np.percentile(energies, q), q, label='Training loss')
+    ax1.set_title('Percentage vs Energy')
+    ax1.set_xlabel('percentage')
+    ax1.set_ylabel('energy')
+    ax1.legend()
+    f.savefig(save_path + 'fig_energy_percent.png')
+    plt.show()
+
+
 def plot_1D_latent_vs_loss(X, y, losses_items, save_path='./'):
     f = plt.figure(figsize=(10, 5))
     ax1 = f.add_subplot(111)
@@ -66,4 +81,14 @@ def plot_1D_latent_vs_loss(X, y, losses_items, save_path='./'):
     ax1.set_ylabel('loss')
     ax1.legend()
     f.savefig(save_path + 'fig_latent.png')
+    plt.show()
+
+
+def plot_3D_latent(z, labels):
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.scatter(z[:, 1], z[:, 0], z[:, 2], c=labels.astype(int))
+    ax.set_xlabel('Encoded')
+    ax.set_ylabel('Euclidean')
+    ax.set_zlabel('Cosine')
     plt.show()

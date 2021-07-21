@@ -15,7 +15,7 @@ setup(
                 "industrial control system",
     license="BSD",
     keywords="Pytorch deep learning cnn active learning",
-    url="http://info.usherbrooke.ca/pmjodoin/cours/ift725/index.html",
+    url="",
     packages=find_packages(exclude=['contrib', 'doc', 'unit_tests']),
     classifiers=[
         "Development Status :: 3 - Alpha",

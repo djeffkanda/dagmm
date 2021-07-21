@@ -37,7 +37,7 @@ class DataManager(object):
         self.kwargs = kwargs
         self.seed = seed
 
-        torch.manual_seed(seed)
+        # torch.manual_seed(seed)
         n = len(train_dataset)
         # num_sample = int(n * initial_train_dataset_ratio)
         # shuffled_idx = torch.randperm(n).long()
@@ -58,7 +58,7 @@ class DataManager(object):
         :param seed: random seed to use
         :return:
         """
-        torch.manual_seed(seed)
+        # torch.manual_seed(seed)
         num_val = int(num_samples * validation_ratio)
         shuffled_idx = torch.randperm(num_samples).long()
         train_idx = shuffled_idx[num_val:]

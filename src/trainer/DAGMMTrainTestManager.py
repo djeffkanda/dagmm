@@ -7,6 +7,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 from datamanager.DataManager import DataManager
+from sklearn.metrics import precision_recall_fscore_support as prf, accuracy_score
 
 
 class DAGMMTrainTestManager(object):
@@ -16,14 +17,11 @@ class DAGMMTrainTestManager(object):
 
     def __init__(self, model,
                  dm: DataManager,
-                 loss_fn: torch.nn.Module,
                  optimizer_factory: Callable[[torch.nn.Module], torch.optim.Optimizer],
                  use_cuda=True):
         """
         Args:
             model: model to train
-            querier: query_strategy object for active learning
-            loss_fn: the loss function used
             optimizer_factory: A callable to create the optimizer. see optimizer function
             below for more details
             use_cuda: to Use the gpu to train the model
@@ -37,7 +35,6 @@ class DAGMMTrainTestManager(object):
 
         self.device = torch.device(device_name)
         self.dm = dm
-        self.loss_fn = loss_fn
         self.model = model
         self.optimizer = optimizer_factory(self.model)
         self.model = self.model.to(self.device)
@@ -76,10 +73,10 @@ class DAGMMTrainTestManager(object):
                     # forward pass
                     code, x_hat, cosim, z_error, gamma = self.model(train_inputs)
                     phi, mu, cov_mat = self.model.compute_params(z_error, gamma)
-                    energy_result, pen_cov_mat = self.model.estimate_sample_energy(phi, mu, cov_mat, z_error)
+                    energy_result, pen_cov_mat = self.model.estimate_sample_energy(z_error, phi, mu, cov_mat,
+                                                                                   device=self.device)
 
-                    loss = self.model.compute_loss(train_inputs, x_hat, energy_result, pen_cov_mat, lambda_1=0.1,
-                                                   lambda_2=0.005)
+                    loss = self.model.compute_loss(train_inputs, x_hat, energy_result, pen_cov_mat)
 
                     # # Use autograd to compute the backward pass.
                     loss.backward()
@@ -98,17 +95,10 @@ class DAGMMTrainTestManager(object):
 
             # evaluate the model on validation data after each epoch
             mean_train_loss = np.mean(train_losses)
-            # mean_train_accuracy = np.mean(train_accuracies)
-            # mean_val_loss, mean_val_accuracy = self.evaluate_on_validation_set()
             metrics['train_loss'].append(mean_train_loss)
-            # metrics['train_accuracy'].append(mean_train_accuracy)
-            # metrics['val_loss'].append(mean_val_loss)
-            # metrics['val_accuracy'].append(mean_val_accuracy)
+            # TODO
+            # Add other metrics to plot
 
-        # self.metric_values['global_train_loss'].append(np.mean(metrics['train_loss']))
-        # # self.metric_values['global_train_accuracy'].append(np.mean(metrics['train_accuracy']))
-        # self.metric_values['global_val_loss'].append(np.mean(metrics['val_loss']))
-        # # self.metric_values['global_val_accuracy'].append(np.mean(metrics['val_accuracy']))
         return metrics
 
     def train(self, num_epochs, save_metrics=True, save_path='./', free_up_mem=True):
@@ -145,49 +135,7 @@ class DAGMMTrainTestManager(object):
         print('Finished learning process')
         return metrics
 
-    def evaluate_on_validation_set(self):
-        """
-        function that evaluate the model on the validation set every epoch
-        """
-        # switch to eval mode so that layers like batchnorm's layers nor dropout's layers
-        # works in eval mode instead of training mode
-        self.model.eval()
-
-        # Get validation data
-        val_loader = self.dm.get_validation_set()
-        validation_loss = 0.0
-        validation_losses = []
-        validation_accuracies = []
-
-        with torch.no_grad():
-            for j, val_data in enumerate(val_loader, 0):
-                # transfer tensors to the selected device
-                val_inputs, _ = val_data[0].to(self.device), val_data[1].to(self.device)
-
-                # forward pass
-                val_outputs = self.model(val_inputs)
-
-                # compute loss function
-                loss = self.loss_fn(val_inputs, val_outputs)
-                loss = loss.mean(axis=1)
-                loss = loss.mean()
-
-                validation_losses.append(loss.item())
-                # validation_accuracies.append(accuracy(val_outputs, val_labels))
-                validation_loss += loss.item()
-
-        mean_val_loss = np.mean(validation_losses)
-        # mean_val_accuracy = np.mean(validation_accuracies)
-
-        # displays metrics
-        print('Validation loss %.3f' % (validation_loss / len(val_loader)))
-
-        # switch back to train mode
-        self.model.train()
-
-        return mean_val_loss, mean_val_loss
-
-    def evaluate_on_test_set(self):
+    def evaluate_on_test_set(self, energy_threshold=80):
         """
         function that evaluate the model on the test set every iteration of the
         active learning process
@@ -198,34 +146,113 @@ class DAGMMTrainTestManager(object):
         codings_label = []
         losses_item = []
         test_loader = self.dm.get_test_set()
+        N = 0
+        gamma_sum = 0
+        mu_sum = 0
+        cov_mat_sum = 0
+
+        # Change the model to evaluation mode
+        self.model.eval()
+
         with torch.no_grad():
+            # Create pytorch's train data_loader
+            train_loader = self.dm.get_train_set()
+
+            for i, data in enumerate(train_loader, 0):
+                # transfer tensors to selected device
+                train_inputs, _ = data[0].to(self.device), data[1].to(self.device)
+
+                # forward pass
+                code, x_hat, cosim, z, gamma = self.model(train_inputs)
+                phi, mu, cov_mat = self.model.compute_params(z, gamma)
+
+                batch_gamma_sum = gamma.sum(axis=0)
+
+                gamma_sum += batch_gamma_sum
+                mu_sum += mu * batch_gamma_sum.unsqueeze(-1)  # keep sums of the numerator only
+                cov_mat_sum += cov_mat * batch_gamma_sum.unsqueeze(-1).unsqueeze(-1)  # keep sums of the numerator only
+
+                N += train_inputs.shape[0]
+
+            train_phi = gamma_sum / N
+            train_mu = mu_sum / gamma_sum.unsqueeze(-1)
+            train_cov = cov_mat_sum / gamma_sum.unsqueeze(-1).unsqueeze(-1)
+
+            print("Train N:", N)
+            print("phi :\n", train_phi)
+            print("mu :\n", train_mu)
+            print("cov :\n", train_cov)
+
+            # Calculate energy using estimated parameters
+
+            train_energy = []
+            train_labels = []
+            train_z = []
+
+            for i, data in enumerate(train_loader, 0):
+                # transfer tensors to selected device
+                train_inputs, train_inputs_labels = data[0].to(self.device), data[1]
+
+                # forward pass
+                code, x_hat, cosim, z, gamma = self.model(train_inputs)
+                sample_energy, pen_cov_mat = self.model.estimate_sample_energy(z,
+                                                                               train_phi,
+                                                                               train_mu,
+                                                                               train_cov,
+                                                                               average_it=False,
+                                                                               device=self.device)
+
+                train_energy.append(sample_energy.cpu().numpy())
+                train_z.append(z.cpu().numpy())
+                train_labels.append(train_inputs_labels.numpy())
+
+            train_energy = np.concatenate(train_energy, axis=0)
+            train_z = np.concatenate(train_z, axis=0)
+            train_labels = np.concatenate(train_labels, axis=0)
+
+            test_energy = []
+            test_labels = []
+            test_z = []
+
             for data in test_loader:
-                test_inputs, label_inputs = data[0].to(self.device), data[1].to(self.device)
+                test_inputs, label_inputs = data[0].to(self.device), data[1]
 
-                test_outputs = self.model.encode(test_inputs)
-                codings.append(test_outputs)
-                codings_label.append(label_inputs)
-                test_outputs = self.model.decode(test_outputs)
+                # forward pass
+                code, x_hat, cosim, z, gamma = self.model(test_inputs)
+                sample_energy, pen_cov_mat = self.model.estimate_sample_energy(z,
+                                                                               train_phi,
+                                                                               train_mu,
+                                                                               train_cov,
+                                                                               average_it=False,
+                                                                               device=self.device)
+                test_energy.append(sample_energy.cpu().numpy())
+                test_z.append(z.cpu().numpy())
+                test_labels.append(label_inputs.numpy())
 
-                # Compute loss function
-                loss = self.loss_fn(test_outputs, test_inputs)
-                loss = loss.mean(axis=1)
+            test_energy = np.concatenate(test_energy, axis=0)
+            test_z = np.concatenate(test_z, axis=0)
+            test_labels = np.concatenate(test_labels, axis=0)
 
-                losses_item.append(loss)
+            combined_energy = np.concatenate([train_energy, test_energy], axis=0)
+            combined_labels = np.concatenate([train_labels, test_labels], axis=0)
 
-                loss = loss.mean()
+            thresh = np.percentile(combined_energy, energy_threshold)
+            print("Threshold :", thresh)
 
-                # loss = loss.mean()
+            # Prediction using the threshold value
+            pred = (test_energy > thresh).astype(int)
+            gt = test_labels.astype(int)
 
-                losses.append(loss.item())
-                # accuracies.append(accuracy(test_outputs, test_labels))
+            accuracy = accuracy_score(gt, pred)
+            precision, recall, f_score, support = prf(gt, pred, average='binary')
 
-        # self.metric_values['global_test_loss'].append(np.mean(losses))
-        # self.metric_values['global_test_accuracy'].append(np.mean(accuracies))
-        codings = torch.cat(codings).cpu().numpy()
-        codings_label = torch.cat(codings_label).cpu().numpy()
-        losses_item = torch.cat(losses_item).cpu().numpy()
-        return codings, codings_label, np.mean(losses), losses_item
+            print("Accuracy : {:0.4f}, Precision : {:0.4f}, Recall : {:0.4f}, F-score : {:0.4f}".format(accuracy,
+                                                                                                        precision,
+                                                                                                        recall,
+                                                                                                        f_score))
+            # switch back to train mode
+            self.model.train()
+            return accuracy, precision, recall, f_score, test_z, test_labels, combined_energy
 
 
 def accuracy(outputs, labels):

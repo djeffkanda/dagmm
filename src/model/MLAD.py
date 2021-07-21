@@ -5,7 +5,7 @@ import torch
 import numpy as np
 
 
-class DAGMM(nn.Module):
+class MLAD(nn.Module):
     """
     this class implements an deep auto encoder gaussian mixture model using
     fullyconnected neural net
@@ -23,10 +23,12 @@ class DAGMM(nn.Module):
         @gmm_layer is a list of units for each layer. The number of units in the last layer
         defines the number of gaussian of the model
         """
-        super(DAGMM, self).__init__()
+        super(MLAD, self).__init__()
 
         code_shape = ae_layers_unit[-1] + 2  # 2 for the euclidean error and the cosine similarity
         self.ae = AE(input_size, ae_layers_unit, fa=fa, last_layer_activation=last_layer_activation)
+        self.ae_common = AE(input_size, ae_layers_unit, fa=fa, last_layer_activation=last_layer_activation)
+        self.ae_exchange = AE(input_size, ae_layers_unit, fa=fa, last_layer_activation=last_layer_activation)
 
         self.cosim = nn.CosineSimilarity()
         self.softmax = nn.Softmax(dim=-1)
@@ -150,7 +152,7 @@ class DAGMM(nn.Module):
         det_cov_mat = torch.diagonal(det_cov_mat, dim1=1, dim2=2)
         det_cov_mat = torch.prod(det_cov_mat, dim=1)
         # print(f"\ndet:{det_cov_mat}")
-        # det_cov_mat = torch.sqrt(det_cov_mat)
+        det_cov_mat = torch.sqrt(det_cov_mat)
 
         exp_term = torch.matmul(mu_z.unsqueeze(-2), inv_cov_mat)
         exp_term = torch.matmul(exp_term, mu_z.unsqueeze(-1))
